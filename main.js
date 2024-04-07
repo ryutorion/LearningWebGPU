@@ -8,29 +8,21 @@ context.configure({
     format: swapchainFormat
 });
 
-const shaderCode = `struct VSOut {
+const shaderCode = `struct VSIn {
+    @location(0) position : vec3<f32>,
+    @location(1) color : vec3<f32>,
+};
+
+struct VSOut {
     @builtin(position) position : vec4<f32>,
     @location(0) color : vec3<f32>,
 };
 
 @vertex
-fn VS(@builtin(vertex_index) index : u32) -> VSOut {
-    const positions = array<vec3<f32>, 6>(
-        vec3<f32>( 0.0 + 0.25,  0.5, 0.5),
-        vec3<f32>(-0.5 + 0.25, -0.5, 0.5),
-        vec3<f32>( 0.5 + 0.25, -0.5, 0.5),
-        vec3<f32>( 0.0 - 0.25,  0.5, 0.0),
-        vec3<f32>(-0.5 - 0.25, -0.5, 0.0),
-        vec3<f32>( 0.5 - 0.25, -0.5, 0.0),
-    );
-    const colors = array<vec3<f32>, 2>(
-        vec3<f32>(1.0, 0.0, 0.0),
-        vec3<f32>(0.0, 1.0, 0.0),
-    );
-
+fn VS(in : VSIn) -> VSOut {
     var out : VSOut;
-    out.position = vec4<f32>(positions[index], 1.0);
-    out.color = colors[index / 3];
+    out.position = vec4<f32>(in.position, 1.0);
+    out.color = in.color;
 
     return out;
 }
@@ -48,11 +40,44 @@ const depthTexture = device.createTexture({
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
 });
 
+const vertices = new Float32Array([
+     0.0 + 0.25,  0.5, 0.5, 1.0, 0.0, 0.0,
+    -0.5 + 0.25, -0.5, 0.5, 1.0, 0.0, 0.0,
+     0.5 + 0.25, -0.5, 0.5, 1.0, 0.0, 0.0,
+     0.0 - 0.25,  0.5, 0.0, 0.0, 1.0, 0.0,
+    -0.5 - 0.25, -0.5, 0.0, 0.0, 1.0, 0.0,
+     0.5 - 0.25, -0.5, 0.0, 0.0, 1.0, 0.0,
+]);
+const vertexBuffer = device.createBuffer({
+    size: vertices.byteLength,
+    usage: GPUBufferUsage.VERTEX,
+    mappedAtCreation: true
+});
+new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+vertexBuffer.unmap();
+
 const renderPipeline = device.createRenderPipeline({
     layout: 'auto',
     vertex: {
         module: shaderModule,
-        entryPoint: 'VS'
+        entryPoint: 'VS',
+        buffers: [
+            {
+                arrayStride: Float32Array.BYTES_PER_ELEMENT * 6,
+                attributes: [
+                    {
+                        format: 'float32x3',
+                        offset: 0,
+                        shaderLocation: 0,
+                    },
+                    {
+                        format: 'float32x3',
+                        offset: Float32Array.BYTES_PER_ELEMENT * 3,
+                        shaderLocation: 1,
+                    },
+                ],
+            },
+        ],
     },
     fragment: {
         module: shaderModule,
@@ -90,7 +115,8 @@ const renderPass = commandEncoder.beginRenderPass({
 });
 
 renderPass.setPipeline(renderPipeline);
-renderPass.draw(6, 1, 0, 0);
+renderPass.setVertexBuffer(0, vertexBuffer);
+renderPass.draw(vertices.length / 6, 1, 0, 0);
 renderPass.end();
 
 device.queue.submit([commandEncoder.finish()]);
