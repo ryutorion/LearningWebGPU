@@ -24,6 +24,15 @@ export class mat4x4 {
         );
     }
 
+    static Scale(x, y, z) {
+        return new mat4x4(
+            x, 0, 0, 0,
+            0, y, 0, 0,
+            0, 0, z, 0,
+            0, 0, 0, 1
+        );
+    }
+
     get byteLength() {
         return this.#m.byteLength;
     }

@@ -72,7 +72,7 @@ const indexBuffer = device.createBuffer({
 new Uint16Array(indexBuffer.getMappedRange()).set(indices);
 indexBuffer.unmap();
 
-const world = mat4x4.Translation(0.25, 0.0, 0.0);
+const world = mat4x4.Scale(0.5, 0.5, 1);
 const uniformBuffer = device.createBuffer({
     size: world.byteLength,
     usage: GPUBufferUsage.UNIFORM,
