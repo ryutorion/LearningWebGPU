@@ -1,5 +1,9 @@
 import { mat4x4 } from './mat4x4.js';
 
+function deg2rad(degree) {
+    return degree * Math.PI / 180;
+}
+
 const swapchainFormat = navigator.gpu.getPreferredCanvasFormat();
 const depthFormat = 'depth32float';
 const adapter = await navigator.gpu.requestAdapter();
@@ -72,7 +76,7 @@ const indexBuffer = device.createBuffer({
 new Uint16Array(indexBuffer.getMappedRange()).set(indices);
 indexBuffer.unmap();
 
-const world = mat4x4.Scale(0.5, 0.5, 1);
+const world = mat4x4.RotationZ(deg2rad(45));
 const uniformBuffer = device.createBuffer({
     size: world.byteLength,
     usage: GPUBufferUsage.UNIFORM,

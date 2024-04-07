@@ -33,6 +33,39 @@ export class mat4x4 {
         );
     }
 
+    static RotationX(rad) {
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        return new mat4x4(
+            1, 0, 0, 0,
+            0, c, s, 0,
+            0, -s, c, 0,
+            0, 0, 0, 1
+        );
+    }
+
+    static RotationY(rad) {
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        return new mat4x4(
+            c, 0, -s, 0,
+            0, 1, 0, 0,
+            s, 0, c, 0,
+            0, 0, 0, 1
+        );
+    }
+
+    static RotationZ(rad) {
+        const c = Math.cos(rad);
+        const s = Math.sin(rad);
+        return new mat4x4(
+            c, s, 0, 0,
+            -s, c, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        );
+    }
+
     get byteLength() {
         return this.#m.byteLength;
     }
