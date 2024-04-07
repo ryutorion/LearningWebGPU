@@ -1,3 +1,5 @@
+import { mat4x4 } from './mat4x4.js';
+
 const swapchainFormat = navigator.gpu.getPreferredCanvasFormat();
 const depthFormat = 'depth32float';
 const adapter = await navigator.gpu.requestAdapter();
@@ -18,10 +20,12 @@ struct VSOut {
     @location(0) color : vec3<f32>,
 };
 
+@binding(0) @group(0) var<uniform> world : mat4x4<f32>;
+
 @vertex
 fn VS(in : VSIn) -> VSOut {
     var out : VSOut;
-    out.position = vec4<f32>(in.position, 1.0);
+    out.position = vec4<f32>(in.position, 1.0) * world;
     out.color = in.color;
 
     return out;
@@ -68,6 +72,15 @@ const indexBuffer = device.createBuffer({
 new Uint16Array(indexBuffer.getMappedRange()).set(indices);
 indexBuffer.unmap();
 
+const world = mat4x4.Translation(0.25, 0.0, 0.0);
+const uniformBuffer = device.createBuffer({
+    size: world.byteLength,
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+});
+world.mapToBuffer(uniformBuffer);
+uniformBuffer.unmap();
+
 const renderPipeline = device.createRenderPipeline({
     layout: 'auto',
     vertex: {
@@ -107,6 +120,19 @@ const renderPipeline = device.createRenderPipeline({
     },
 });
 
+const bindGroup = device.createBindGroup({
+    layout: renderPipeline.getBindGroupLayout(0),
+    entries: [
+        {
+            binding: 0,
+            resource: {
+                buffer: uniformBuffer,
+            },   
+        },
+    ],    
+});
+
+
 const commandEncoder = device.createCommandEncoder();
 
 const renderPass = commandEncoder.beginRenderPass({
@@ -127,6 +153,7 @@ const renderPass = commandEncoder.beginRenderPass({
 });
 
 renderPass.setPipeline(renderPipeline);
+renderPass.setBindGroup(0, bindGroup);
 renderPass.setVertexBuffer(0, vertexBuffer);
 renderPass.setIndexBuffer(indexBuffer, 'uint16');
 renderPass.drawIndexed(indices.length, 1, 0, 0, 0);
