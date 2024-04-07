@@ -56,6 +56,18 @@ const vertexBuffer = device.createBuffer({
 new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
 vertexBuffer.unmap();
 
+const indices = new Uint16Array([
+    0, 1, 2,
+    3, 4, 5,
+]);
+const indexBuffer = device.createBuffer({
+    size: indices.byteLength,
+    usage: GPUBufferUsage.INDEX,
+    mappedAtCreation: true
+});
+new Uint16Array(indexBuffer.getMappedRange()).set(indices);
+indexBuffer.unmap();
+
 const renderPipeline = device.createRenderPipeline({
     layout: 'auto',
     vertex: {
@@ -116,7 +128,8 @@ const renderPass = commandEncoder.beginRenderPass({
 
 renderPass.setPipeline(renderPipeline);
 renderPass.setVertexBuffer(0, vertexBuffer);
-renderPass.draw(vertices.length / 6, 1, 0, 0);
+renderPass.setIndexBuffer(indexBuffer, 'uint16');
+renderPass.drawIndexed(indices.length, 1, 0, 0, 0);
 renderPass.end();
 
 device.queue.submit([commandEncoder.finish()]);
