@@ -1,4 +1,5 @@
 import { mat4x4 } from './mat4x4.js';
+import { vec3 } from './vec3.js';
 
 function deg2rad(degree) {
     return degree * Math.PI / 180;
@@ -24,12 +25,12 @@ struct VSOut {
     @location(0) color : vec3<f32>,
 };
 
-@binding(0) @group(0) var<uniform> world : mat4x4<f32>;
+@binding(0) @group(0) var<uniform> wvp : mat4x4<f32>;
 
 @vertex
 fn VS(in : VSIn) -> VSOut {
     var out : VSOut;
-    out.position = vec4<f32>(in.position, 1.0) * world;
+    out.position = vec4<f32>(in.position, 1.0) * wvp;
     out.color = in.color;
 
     return out;
@@ -49,12 +50,12 @@ const depthTexture = device.createTexture({
 });
 
 const vertices = new Float32Array([
-     0.0 + 0.25,  0.5, -1.0, 1.0, 0.0, 0.0,
-    -0.5 + 0.25, -0.5, -1.0, 1.0, 0.0, 0.0,
-     0.5 + 0.25, -0.5, -1.0, 1.0, 0.0, 0.0,
-     0.0 - 0.25,  0.5, -1.5, 0.0, 1.0, 0.0,
-    -0.5 - 0.25, -0.5, -1.5, 0.0, 1.0, 0.0,
-     0.5 - 0.25, -0.5, -1.5, 0.0, 1.0, 0.0,
+     0.0 + 0.25,  0.5,  0.0, 1.0, 0.0, 0.0,
+    -0.5 + 0.25, -0.5,  0.0, 1.0, 0.0, 0.0,
+     0.5 + 0.25, -0.5,  0.0, 1.0, 0.0, 0.0,
+     0.0 - 0.25,  0.5, -0.5, 0.0, 1.0, 0.0,
+    -0.5 - 0.25, -0.5, -0.5, 0.0, 1.0, 0.0,
+     0.5 - 0.25, -0.5, -0.5, 0.0, 1.0, 0.0,
 ]);
 const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
@@ -76,13 +77,26 @@ const indexBuffer = device.createBuffer({
 new Uint16Array(indexBuffer.getMappedRange()).set(indices);
 indexBuffer.unmap();
 
+const translation = mat4x4.Translation(new vec3(0, 0, 0));
+const scale = mat4x4.Scale(new vec3(1, 1, 1));
+const rotation = mat4x4.RotationZ(deg2rad(0));
+const world = rotation.mul(scale).mul(translation);
+
+const eye = new vec3(0, 0, 1);
+const at = new vec3(0, 0, 0);
+const up = new vec3(0, 1, 0);
+const view = mat4x4.LookAtRH(eye, at, up);
+
 const projection = mat4x4.PerspectiveFovRH(deg2rad(90), canvas.width / canvas.height, 0.1, 100.0);
+
+const wvp = world.mul(view).mul(projection);
+
 const uniformBuffer = device.createBuffer({
-    size: projection.byteLength,
+    size: wvp.byteLength,
     usage: GPUBufferUsage.UNIFORM,
     mappedAtCreation: true,
 });
-projection.mapToBuffer(uniformBuffer);
+wvp.mapToBuffer(uniformBuffer);
 uniformBuffer.unmap();
 
 const renderPipeline = device.createRenderPipeline({
