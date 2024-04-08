@@ -66,6 +66,20 @@ export class mat4x4 {
         );
     }
 
+    static PerspectiveFovRH(fov, aspect, near, far) {
+        const scaleY = 1 / Math.tan(fov * 0.5);
+        const scaleX = scaleY / aspect;
+        const scaleZ = near / (far - near);
+        const transZ = near * far / (far - near);
+
+        return new mat4x4(
+            scaleX, 0, 0, 0,
+            0, scaleY, 0, 0,
+            0, 0, scaleZ, -1,
+            0, 0, transZ, 0
+        );
+    }
+
     get byteLength() {
         return this.#m.byteLength;
     }

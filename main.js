@@ -49,12 +49,12 @@ const depthTexture = device.createTexture({
 });
 
 const vertices = new Float32Array([
-     0.0 + 0.25,  0.5, 0.5, 1.0, 0.0, 0.0,
-    -0.5 + 0.25, -0.5, 0.5, 1.0, 0.0, 0.0,
-     0.5 + 0.25, -0.5, 0.5, 1.0, 0.0, 0.0,
-     0.0 - 0.25,  0.5, 0.0, 0.0, 1.0, 0.0,
-    -0.5 - 0.25, -0.5, 0.0, 0.0, 1.0, 0.0,
-     0.5 - 0.25, -0.5, 0.0, 0.0, 1.0, 0.0,
+     0.0 + 0.25,  0.5, -1.0, 1.0, 0.0, 0.0,
+    -0.5 + 0.25, -0.5, -1.0, 1.0, 0.0, 0.0,
+     0.5 + 0.25, -0.5, -1.0, 1.0, 0.0, 0.0,
+     0.0 - 0.25,  0.5, -1.5, 0.0, 1.0, 0.0,
+    -0.5 - 0.25, -0.5, -1.5, 0.0, 1.0, 0.0,
+     0.5 - 0.25, -0.5, -1.5, 0.0, 1.0, 0.0,
 ]);
 const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
@@ -76,13 +76,13 @@ const indexBuffer = device.createBuffer({
 new Uint16Array(indexBuffer.getMappedRange()).set(indices);
 indexBuffer.unmap();
 
-const world = mat4x4.RotationZ(deg2rad(45));
+const projection = mat4x4.PerspectiveFovRH(deg2rad(90), canvas.width / canvas.height, 0.1, 100.0);
 const uniformBuffer = device.createBuffer({
-    size: world.byteLength,
+    size: projection.byteLength,
     usage: GPUBufferUsage.UNIFORM,
     mappedAtCreation: true,
 });
-world.mapToBuffer(uniformBuffer);
+projection.mapToBuffer(uniformBuffer);
 uniformBuffer.unmap();
 
 const renderPipeline = device.createRenderPipeline({
