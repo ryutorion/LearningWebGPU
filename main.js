@@ -50,12 +50,35 @@ const depthTexture = device.createTexture({
 });
 
 const vertices = new Float32Array([
-     0.0 + 0.25,  0.5,  0.0, 1.0, 0.0, 0.0,
-    -0.5 + 0.25, -0.5,  0.0, 1.0, 0.0, 0.0,
-     0.5 + 0.25, -0.5,  0.0, 1.0, 0.0, 0.0,
-     0.0 - 0.25,  0.5, -0.5, 0.0, 1.0, 0.0,
-    -0.5 - 0.25, -0.5, -0.5, 0.0, 1.0, 0.0,
-     0.5 - 0.25, -0.5, -0.5, 0.0, 1.0, 0.0,
+    -0.5,  0.5,  0.5, 1.0, 0.0, 0.0,
+    -0.5, -0.5,  0.5, 1.0, 0.0, 0.0,
+     0.5, -0.5,  0.5, 1.0, 0.0, 0.0,
+     0.5,  0.5,  0.5, 1.0, 0.0, 0.0,
+
+    -0.5,  0.5, -0.5, 0.0, 1.0, 0.0,
+    -0.5, -0.5, -0.5, 0.0, 1.0, 0.0,
+    -0.5, -0.5,  0.5, 0.0, 1.0, 0.0,
+    -0.5,  0.5,  0.5, 0.0, 1.0, 0.0,
+
+    -0.5,  0.5, -0.5, 0.0, 0.0, 1.0,
+     0.5,  0.5, -0.5, 0.0, 0.0, 1.0,
+     0.5, -0.5, -0.5, 0.0, 0.0, 1.0,
+    -0.5, -0.5, -0.5, 0.0, 0.0, 1.0,
+
+     0.5,  0.5,  0.5, 1.0, 1.0, 0.0,
+     0.5, -0.5,  0.5, 1.0, 1.0, 0.0,
+     0.5, -0.5, -0.5, 1.0, 1.0, 0.0,
+     0.5,  0.5, -0.5, 1.0, 1.0, 0.0,
+
+    -0.5,  0.5, -0.5, 0.0, 1.0, 1.0,
+    -0.5,  0.5,  0.5, 0.0, 1.0, 1.0,
+     0.5,  0.5,  0.5, 0.0, 1.0, 1.0,
+     0.5,  0.5, -0.5, 0.0, 1.0, 1.0,
+
+    -0.5, -0.5,  0.5, 1.0, 0.0, 1.0,
+    -0.5, -0.5, -0.5, 1.0, 0.0, 1.0,
+     0.5, -0.5, -0.5, 1.0, 0.0, 1.0,
+     0.5, -0.5,  0.5, 1.0, 0.0, 1.0,
 ]);
 const vertexBuffer = device.createBuffer({
     size: vertices.byteLength,
@@ -67,7 +90,22 @@ vertexBuffer.unmap();
 
 const indices = new Uint16Array([
     0, 1, 2,
-    3, 4, 5,
+    0, 2, 3,
+
+    4, 5, 6,
+    4, 6, 7,
+
+    8, 9, 10,
+    8, 10, 11,
+
+    12, 13, 14,
+    12, 14, 15,
+
+    16, 17, 18,
+    16, 18, 19,
+
+    20, 21, 22,
+    20, 22, 23,
 ]);
 const indexBuffer = device.createBuffer({
     size: indices.byteLength,
@@ -77,23 +115,23 @@ const indexBuffer = device.createBuffer({
 new Uint16Array(indexBuffer.getMappedRange()).set(indices);
 indexBuffer.unmap();
 
-const translation = mat4x4.Translation(new vec3(0, 0, 0));
-const scale = mat4x4.Scale(new vec3(1, 1, 1));
-const rotation = mat4x4.RotationZ(deg2rad(0));
-const world = rotation.mul(scale).mul(translation);
+let translation = mat4x4.Translation(new vec3(0, 0, 0));
+let scale = mat4x4.Scale(new vec3(1, 1, 1));
+let rotation = mat4x4.RotationZ(deg2rad(0));
+let world = rotation.mul(scale).mul(translation);
 
-const eye = new vec3(0, 0, 1);
+const eye = new vec3(0, 0, 2);
 const at = new vec3(0, 0, 0);
 const up = new vec3(0, 1, 0);
 const view = mat4x4.LookAtRH(eye, at, up);
 
 const projection = mat4x4.PerspectiveFovRH(deg2rad(90), canvas.width / canvas.height, 0.1, 100.0);
 
-const wvp = world.mul(view).mul(projection);
+let wvp = world.mul(view).mul(projection);
 
 const uniformBuffer = device.createBuffer({
     size: wvp.byteLength,
-    usage: GPUBufferUsage.UNIFORM,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     mappedAtCreation: true,
 });
 wvp.mapToBuffer(uniformBuffer);
@@ -122,6 +160,14 @@ const renderPipeline = device.createRenderPipeline({
             },
         ],
     },
+    primitive: {
+        cullMode: 'back',
+    },
+    depthStencil: {
+        format: depthFormat,
+        depthWriteEnabled: true,
+        depthCompare: 'greater-equal'
+    },
     fragment: {
         module: shaderModule,
         entryPoint: 'FS',
@@ -130,11 +176,6 @@ const renderPipeline = device.createRenderPipeline({
                 format: swapchainFormat
             },
         ]
-    },
-    depthStencil: {
-        format: depthFormat,
-        depthWriteEnabled: true,
-        depthCompare: 'greater-equal'
     },
 });
 
@@ -150,31 +191,59 @@ const bindGroup = device.createBindGroup({
     ],    
 });
 
+let start;
+let prev;
 
-const commandEncoder = device.createCommandEncoder();
+function frame(timestamp) {
+    if (!start){
+        start = timestamp;
+        prev = start;
+    }
+    const elapsed = timestamp - start;
+    const delta = timestamp - prev;
+    prev = timestamp;
 
-const renderPass = commandEncoder.beginRenderPass({
-    colorAttachments: [
-        {
-            view: context.getCurrentTexture().createView(),
-            clearValue: [0.0, 0.0, 0.0, 1.0],
-            loadOp: 'clear',
-            storeOp: 'store',
-        }
-    ],
-    depthStencilAttachment: {
-        view: depthTexture.createView(),
-        depthClearValue: 0.0,
-        depthLoadOp: 'clear',
-        depthStoreOp: 'store',
-    },
-});
+    rotation = mat4x4.RotationX(elapsed / 1000).mul(mat4x4.RotationY(elapsed / 1000));
+    world = rotation.mul(scale).mul(translation);
 
-renderPass.setPipeline(renderPipeline);
-renderPass.setBindGroup(0, bindGroup);
-renderPass.setVertexBuffer(0, vertexBuffer);
-renderPass.setIndexBuffer(indexBuffer, 'uint16');
-renderPass.drawIndexed(indices.length, 1, 0, 0, 0);
-renderPass.end();
+    wvp = world.mul(view).mul(projection);
 
-device.queue.submit([commandEncoder.finish()]);
+    device.queue.writeBuffer(
+        uniformBuffer,
+        0,
+        wvp.buffer,
+        0,
+        wvp.byteLength
+    );
+
+    const commandEncoder = device.createCommandEncoder();
+    
+    const renderPass = commandEncoder.beginRenderPass({
+        colorAttachments: [
+            {
+                view: context.getCurrentTexture().createView(),
+                clearValue: [0.0, 0.0, 0.0, 1.0],
+                loadOp: 'clear',
+                storeOp: 'store',
+            }
+        ],
+        depthStencilAttachment: {
+            view: depthTexture.createView(),
+            depthClearValue: 0.0,
+            depthLoadOp: 'clear',
+            depthStoreOp: 'store',
+        },
+    });
+
+    renderPass.setPipeline(renderPipeline);
+    renderPass.setBindGroup(0, bindGroup);
+    renderPass.setVertexBuffer(0, vertexBuffer);
+    renderPass.setIndexBuffer(indexBuffer, 'uint16');
+    renderPass.drawIndexed(indices.length, 1, 0, 0, 0);
+    renderPass.end();
+
+    device.queue.submit([commandEncoder.finish()]);
+
+    requestAnimationFrame(frame);
+}
+frame();

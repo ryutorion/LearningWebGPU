@@ -97,6 +97,10 @@ export class mat4x4 {
         return this.#m.byteLength;
     }
 
+    get buffer() {
+        return this.#m.buffer;
+    }
+
     mapToBuffer(buffer) {
         new Float32Array(buffer.getMappedRange()).set(this.#m);
     }
