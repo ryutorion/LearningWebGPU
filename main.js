@@ -1,5 +1,7 @@
 import { mat4x4 } from './mat4x4.js';
 import { vec3 } from './vec3.js';
+import { GLB } from './glb.js';
+import { GLTFMesh } from './GLTFMesh.js';
 
 function deg2rad(degree) {
     return degree * Math.PI / 180;
@@ -17,12 +19,11 @@ context.configure({
 
 const shaderCode = `struct VSIn {
     @location(0) position : vec3<f32>,
-    @location(1) color : vec3<f32>,
 };
 
 struct VSOut {
     @builtin(position) position : vec4<f32>,
-    @location(0) color : vec3<f32>,
+    // @location(0) color : vec3<f32>,
 };
 
 @binding(0) @group(0) var<uniform> wvp : mat4x4<f32>;
@@ -31,14 +32,13 @@ struct VSOut {
 fn VS(in : VSIn) -> VSOut {
     var out : VSOut;
     out.position = vec4<f32>(in.position, 1.0) * wvp;
-    out.color = in.color;
 
     return out;
 }
 
 @fragment
-fn FS(@location(0) color : vec3<f32>) -> @location(0) vec4<f32> {
-    return vec4<f32>(color, 1.0);
+fn FS() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
 }`;
 const shaderModule = device.createShaderModule({ code: shaderCode });
 console.log(await shaderModule.getCompilationInfo());
@@ -49,71 +49,11 @@ const depthTexture = device.createTexture({
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
 });
 
-const vertices = new Float32Array([
-    -0.5,  0.5,  0.5, 1.0, 0.0, 0.0,
-    -0.5, -0.5,  0.5, 1.0, 0.0, 0.0,
-     0.5, -0.5,  0.5, 1.0, 0.0, 0.0,
-     0.5,  0.5,  0.5, 1.0, 0.0, 0.0,
+const glb = await fetch('./models/Box.glb')
+    .then(response => response.arrayBuffer())
+    .then(buffer => new GLB(buffer));
 
-    -0.5,  0.5, -0.5, 0.0, 1.0, 0.0,
-    -0.5, -0.5, -0.5, 0.0, 1.0, 0.0,
-    -0.5, -0.5,  0.5, 0.0, 1.0, 0.0,
-    -0.5,  0.5,  0.5, 0.0, 1.0, 0.0,
-
-    -0.5,  0.5, -0.5, 0.0, 0.0, 1.0,
-     0.5,  0.5, -0.5, 0.0, 0.0, 1.0,
-     0.5, -0.5, -0.5, 0.0, 0.0, 1.0,
-    -0.5, -0.5, -0.5, 0.0, 0.0, 1.0,
-
-     0.5,  0.5,  0.5, 1.0, 1.0, 0.0,
-     0.5, -0.5,  0.5, 1.0, 1.0, 0.0,
-     0.5, -0.5, -0.5, 1.0, 1.0, 0.0,
-     0.5,  0.5, -0.5, 1.0, 1.0, 0.0,
-
-    -0.5,  0.5, -0.5, 0.0, 1.0, 1.0,
-    -0.5,  0.5,  0.5, 0.0, 1.0, 1.0,
-     0.5,  0.5,  0.5, 0.0, 1.0, 1.0,
-     0.5,  0.5, -0.5, 0.0, 1.0, 1.0,
-
-    -0.5, -0.5,  0.5, 1.0, 0.0, 1.0,
-    -0.5, -0.5, -0.5, 1.0, 0.0, 1.0,
-     0.5, -0.5, -0.5, 1.0, 0.0, 1.0,
-     0.5, -0.5,  0.5, 1.0, 0.0, 1.0,
-]);
-const vertexBuffer = device.createBuffer({
-    size: vertices.byteLength,
-    usage: GPUBufferUsage.VERTEX,
-    mappedAtCreation: true
-});
-new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
-vertexBuffer.unmap();
-
-const indices = new Uint16Array([
-    0, 1, 2,
-    0, 2, 3,
-
-    4, 5, 6,
-    4, 6, 7,
-
-    8, 9, 10,
-    8, 10, 11,
-
-    12, 13, 14,
-    12, 14, 15,
-
-    16, 17, 18,
-    16, 18, 19,
-
-    20, 21, 22,
-    20, 22, 23,
-]);
-const indexBuffer = device.createBuffer({
-    size: indices.byteLength,
-    usage: GPUBufferUsage.INDEX,
-    mappedAtCreation: true
-});
-new Uint16Array(indexBuffer.getMappedRange()).set(indices);
-indexBuffer.unmap();
+const meshes = glb.json.meshes.map(mesh => new GLTFMesh(device, glb, mesh));
 
 let translation = mat4x4.Translation(new vec3(0, 0, 0));
 let scale = mat4x4.Scale(new vec3(1, 1, 1));
@@ -144,17 +84,12 @@ const renderPipeline = device.createRenderPipeline({
         entryPoint: 'VS',
         buffers: [
             {
-                arrayStride: Float32Array.BYTES_PER_ELEMENT * 6,
+                arrayStride: Float32Array.BYTES_PER_ELEMENT * 3,
                 attributes: [
                     {
                         format: 'float32x3',
                         offset: 0,
                         shaderLocation: 0,
-                    },
-                    {
-                        format: 'float32x3',
-                        offset: Float32Array.BYTES_PER_ELEMENT * 3,
-                        shaderLocation: 1,
                     },
                 ],
             },
@@ -237,9 +172,7 @@ function frame(timestamp) {
 
     renderPass.setPipeline(renderPipeline);
     renderPass.setBindGroup(0, bindGroup);
-    renderPass.setVertexBuffer(0, vertexBuffer);
-    renderPass.setIndexBuffer(indexBuffer, 'uint16');
-    renderPass.drawIndexed(indices.length, 1, 0, 0, 0);
+    meshes.forEach(mesh => mesh.draw(renderPass));
     renderPass.end();
 
     device.queue.submit([commandEncoder.finish()]);
