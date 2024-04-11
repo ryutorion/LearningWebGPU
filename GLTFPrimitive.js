@@ -60,12 +60,20 @@ export class GLTFPrimitive {
     static get COMPONENT_TYPE_FLOAT() { return 5126; }
 
     constructor(device, glb, primitive) {
-        this.#vertexBuffer = createBuffer(
-            device,
-            glb,
-            glb.json.accessors[primitive.attributes.POSITION],
-            GPUBufferUsage.VERTEX
-        );
+        this.#vertexBuffer = {
+            position: createBuffer(
+                device,
+                glb,
+                glb.json.accessors[primitive.attributes.POSITION],
+                GPUBufferUsage.VERTEX
+            ),
+            normal: createBuffer(
+                device,
+                glb,
+                glb.json.accessors[primitive.attributes.NORMAL],
+                GPUBufferUsage.VERTEX
+            ),
+        }
 
         if(primitive.indices == undefined) {
             return;
@@ -78,7 +86,8 @@ export class GLTFPrimitive {
     }
 
     draw(renderPass) {
-        renderPass.setVertexBuffer(0, this.#vertexBuffer);
+        renderPass.setVertexBuffer(0, this.#vertexBuffer.position);
+        renderPass.setVertexBuffer(1, this.#vertexBuffer.normal);
         renderPass.setIndexBuffer(this.#indexBuffer, this.#indexFormat);
         renderPass.drawIndexed(this.#indexCount, 1, 0, 0, 0);
     }

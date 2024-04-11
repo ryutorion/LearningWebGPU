@@ -19,26 +19,42 @@ context.configure({
 
 const shaderCode = `struct VSIn {
     @location(0) position : vec3<f32>,
+    @location(1) normal : vec3<f32>,
 };
 
 struct VSOut {
     @builtin(position) position : vec4<f32>,
-    // @location(0) color : vec3<f32>,
+    @location(0) normal : vec3<f32>,
 };
 
-@binding(0) @group(0) var<uniform> wvp : mat4x4<f32>;
+struct Scene {
+    w : mat4x4<f32>,
+    vp : mat4x4<f32>,
+};
+struct DirectionalLight {
+    direction : vec3<f32>,
+    color : vec3<f32>,
+};
+
+@binding(0) @group(0) var<uniform> scene : Scene;
+@binding(1) @group(0) var<uniform> light : DirectionalLight;
 
 @vertex
 fn VS(in : VSIn) -> VSOut {
+    var position = vec4<f32>(in.position, 1.0) * scene.w;
+
     var out : VSOut;
-    out.position = vec4<f32>(in.position, 1.0) * wvp;
+    out.position = position * scene.vp;
+    out.normal = (vec4<f32>(in.normal, 0.0) * scene.w).xyz;
 
     return out;
 }
 
 @fragment
-fn FS() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+fn FS(@location(0) normal : vec3<f32>) -> @location(0) vec4<f32> {
+    var lightDir = light.direction;
+    var diffuse = max(dot(normal, lightDir), 0.0);
+    return vec4<f32>(light.color * diffuse, 1.0);
 }`;
 const shaderModule = device.createShaderModule({ code: shaderCode });
 console.log(await shaderModule.getCompilationInfo());
@@ -57,7 +73,7 @@ const meshes = glb.json.meshes.map(mesh => new GLTFMesh(device, glb, mesh));
 
 let translation = mat4x4.Translation(new vec3(0, 0, 0));
 let scale = mat4x4.Scale(new vec3(1, 1, 1));
-let rotation = mat4x4.RotationZ(deg2rad(0));
+let rotation = mat4x4.RotationY(deg2rad(0));
 let world = rotation.mul(scale).mul(translation);
 
 const eye = new vec3(0, 0, 2);
@@ -67,15 +83,23 @@ const view = mat4x4.LookAtRH(eye, at, up);
 
 const projection = mat4x4.PerspectiveFovRH(deg2rad(90), canvas.width / canvas.height, 0.1, 100.0);
 
-let wvp = world.mul(view).mul(projection);
+let vp = view.mul(projection);
 
-const uniformBuffer = device.createBuffer({
-    size: wvp.byteLength,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    mappedAtCreation: true,
-});
-wvp.mapToBuffer(uniformBuffer);
-uniformBuffer.unmap();
+const light = {
+    direction: new vec3(0, 0, 1).normalize(),
+    color: new vec3(1, 1, 1),
+};
+
+const uniformBuffer = {
+    scene: device.createBuffer({
+        size: world.byteLength + vp.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    }),
+    light: device.createBuffer({
+        size: 32,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    }),
+}
 
 const renderPipeline = device.createRenderPipeline({
     layout: 'auto',
@@ -93,6 +117,16 @@ const renderPipeline = device.createRenderPipeline({
                     },
                 ],
             },
+            {
+                arrayStride: Float32Array.BYTES_PER_ELEMENT * 3,
+                attributes: [
+                    {
+                        format: 'float32x3',
+                        offset: 0,
+                        shaderLocation: 1,
+                    },
+                ],
+            }
         ],
     },
     primitive: {
@@ -120,9 +154,19 @@ const bindGroup = device.createBindGroup({
         {
             binding: 0,
             resource: {
-                buffer: uniformBuffer,
+                buffer: uniformBuffer.scene,
+                offset: 0,
+                size: world.byteLength + vp.byteLength,
             },   
         },
+        {
+            binding: 1,
+            resource: {
+                buffer: uniformBuffer.light,
+                offset: 0,
+                size: 32,
+            },
+        }
     ],    
 });
 
@@ -138,17 +182,38 @@ function frame(timestamp) {
     const delta = timestamp - prev;
     prev = timestamp;
 
-    rotation = mat4x4.RotationX(elapsed / 1000).mul(mat4x4.RotationY(elapsed / 1000));
+    rotation = mat4x4.RotationY(elapsed/1000).mul(mat4x4.RotationX(deg2rad(45)));
     world = rotation.mul(scale).mul(translation);
 
-    wvp = world.mul(view).mul(projection);
-
+    let bufferOffset = 0;
     device.queue.writeBuffer(
-        uniformBuffer,
+        uniformBuffer.scene,
+        bufferOffset,
+        world.buffer,
         0,
-        wvp.buffer,
+        world.byteLength
+    );
+    bufferOffset += world.byteLength;
+    device.queue.writeBuffer(
+        uniformBuffer.scene,
+        bufferOffset,
+        vp.buffer,
         0,
-        wvp.byteLength
+        vp.byteLength
+    );
+    device.queue.writeBuffer(
+        uniformBuffer.light,
+        0,
+        new Float32Array([
+            light.direction.x,
+            light.direction.y,
+            light.direction.z,
+            0,
+            light.color.x,
+            light.color.y,
+            light.color.z,
+            0,
+        ])
     );
 
     const commandEncoder = device.createCommandEncoder();
