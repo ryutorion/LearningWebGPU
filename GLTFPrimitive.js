@@ -73,6 +73,12 @@ export class GLTFPrimitive {
                 glb.json.accessors[primitive.attributes.NORMAL],
                 GPUBufferUsage.VERTEX
             ),
+            uv: createBuffer(
+                device,
+                glb,
+                glb.json.accessors[primitive.attributes.TEXCOORD_0],
+                GPUBufferUsage.VERTEX
+            )
         }
 
         if(primitive.indices == undefined) {
@@ -88,6 +94,7 @@ export class GLTFPrimitive {
     draw(renderPass) {
         renderPass.setVertexBuffer(0, this.#vertexBuffer.position);
         renderPass.setVertexBuffer(1, this.#vertexBuffer.normal);
+        renderPass.setVertexBuffer(2, this.#vertexBuffer.uv);
         renderPass.setIndexBuffer(this.#indexBuffer, this.#indexFormat);
         renderPass.drawIndexed(this.#indexCount, 1, 0, 0, 0);
     }

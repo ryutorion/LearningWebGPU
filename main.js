@@ -1,6 +1,8 @@
 import { mat4x4 } from './mat4x4.js';
 import { vec3 } from './vec3.js';
 import { GLB } from './glb.js';
+import { GLTFImage } from './GLTFImage.js';
+import { GLTFTexture } from './GLTFTexture.js';
 import { GLTFMesh } from './GLTFMesh.js';
 
 function deg2rad(degree) {
@@ -20,11 +22,13 @@ context.configure({
 const shaderCode = `struct VSIn {
     @location(0) position : vec3<f32>,
     @location(1) normal : vec3<f32>,
+    @location(2) uv : vec2<f32>,
 };
 
 struct VSOut {
     @builtin(position) position : vec4<f32>,
     @location(0) normal : vec3<f32>,
+    @location(1) uv : vec2<f32>,
 };
 
 struct Scene {
@@ -38,6 +42,8 @@ struct DirectionalLight {
 
 @binding(0) @group(0) var<uniform> scene : Scene;
 @binding(1) @group(0) var<uniform> light : DirectionalLight;
+@binding(2) @group(0) var tex : texture_2d<f32>;
+@binding(3) @group(0) var smp : sampler;
 
 @vertex
 fn VS(in : VSIn) -> VSOut {
@@ -46,15 +52,16 @@ fn VS(in : VSIn) -> VSOut {
     var out : VSOut;
     out.position = position * scene.vp;
     out.normal = (vec4<f32>(in.normal, 0.0) * scene.w).xyz;
+    out.uv = in.uv;
 
     return out;
 }
 
 @fragment
-fn FS(@location(0) normal : vec3<f32>) -> @location(0) vec4<f32> {
+fn FS(@location(0) normal : vec3<f32>, @location(1) uv : vec2<f32>) -> @location(0) vec4<f32> {
     var lightDir = light.direction;
     var diffuse = max(dot(normal, lightDir), 0.0);
-    return vec4<f32>(light.color * diffuse, 1.0);
+    return textureSample(tex, smp, uv) * vec4<f32>(light.color * diffuse, 1.0);
 }`;
 const shaderModule = device.createShaderModule({ code: shaderCode });
 console.log(await shaderModule.getCompilationInfo());
@@ -65,10 +72,13 @@ const depthTexture = device.createTexture({
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
 });
 
-const glb = await fetch('./models/Box.glb')
+const glb = await fetch('./models/DamagedHelmet.glb')
     .then(response => response.arrayBuffer())
     .then(buffer => new GLB(buffer));
+console.log(glb);
 
+const images = await Promise.all(glb.json.images.map(image => GLTFImage.load(glb, image)));
+const textures = glb.json.textures.map(texture => new GLTFTexture(device, images, texture));
 const meshes = glb.json.meshes.map(mesh => new GLTFMesh(device, glb, mesh));
 
 let translation = mat4x4.Translation(new vec3(0, 0, 0));
@@ -76,7 +86,7 @@ let scale = mat4x4.Scale(new vec3(1, 1, 1));
 let rotation = mat4x4.RotationY(deg2rad(0));
 let world = rotation.mul(scale).mul(translation);
 
-const eye = new vec3(0, 0, 2);
+const eye = new vec3(0, 0, 3);
 const at = new vec3(0, 0, 0);
 const up = new vec3(0, 1, 0);
 const view = mat4x4.LookAtRH(eye, at, up);
@@ -126,7 +136,17 @@ const renderPipeline = device.createRenderPipeline({
                         shaderLocation: 1,
                     },
                 ],
-            }
+            },
+            {
+                arrayStride: Float32Array.BYTES_PER_ELEMENT * 2,
+                attributes: [
+                    {
+                        format: 'float32x2',
+                        offset: 0,
+                        shaderLocation: 2,
+                    },
+                ],
+            },
         ],
     },
     primitive: {
@@ -148,6 +168,11 @@ const renderPipeline = device.createRenderPipeline({
     },
 });
 
+const sampler = device.createSampler({
+    addressModeU: 'repeat',
+    addressModeV: 'repeat',
+});
+
 const bindGroup = device.createBindGroup({
     layout: renderPipeline.getBindGroupLayout(0),
     entries: [
@@ -166,8 +191,16 @@ const bindGroup = device.createBindGroup({
                 offset: 0,
                 size: 32,
             },
-        }
-    ],    
+        },
+        {
+            binding: 2,
+            resource: textures[0].view,
+        },
+        {
+            binding: 3,
+            resource: sampler,
+        },
+    ],
 });
 
 let start;
@@ -182,7 +215,7 @@ function frame(timestamp) {
     const delta = timestamp - prev;
     prev = timestamp;
 
-    rotation = mat4x4.RotationY(elapsed/1000).mul(mat4x4.RotationX(deg2rad(45)));
+    rotation = mat4x4.RotationX(deg2rad(90)).mul(mat4x4.RotationY(elapsed/1000));
     world = rotation.mul(scale).mul(translation);
 
     let bufferOffset = 0;
